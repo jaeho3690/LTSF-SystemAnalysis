@@ -25,11 +25,6 @@ def main(cfg: DictConfig) -> None:
     print_options(cfg)
     pl.seed_everything(cfg.seed)
 
-    # print(torch.cuda.memory_allocated())
-    # model = build_model(cfg)
-    # model.cuda()
-    # print(torch.cuda.memory_allocated())
-
     checkpoint_path = os.path.join("checkpoints/", str(datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")))
 
     log.info(f"Training {cfg.model.model_name} model on {cfg.data.data_name} dataset")

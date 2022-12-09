@@ -10,9 +10,6 @@ n_heads: 8
 e_layers: 2
 d_layers: 1
 d_ff: 2048
-moving_avg: 25
-factor: 1
-#distil: true # what is this?
 dropout: 0.05
 
 activation: gelu
