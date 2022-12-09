@@ -60,8 +60,7 @@ def main(cfg: DictConfig) -> None:
             check_val_every_n_epoch=cfg.optimization.callbacks.check_val_every_n_epoch,
             max_epochs=cfg.optimization.callbacks.max_epochs,
             callbacks=[checkpoint_callback, early_stop_callback, lr_monitor_callback],
-            limit_train_batches=2,
-            limit_val_batches=2,
+            fast_dev_run=cfg.fast_dev_run,
             precision=16,
         )
     else:
@@ -71,8 +70,7 @@ def main(cfg: DictConfig) -> None:
             check_val_every_n_epoch=cfg.optimization.callbacks.check_val_every_n_epoch,
             max_epochs=cfg.optimization.callbacks.max_epochs,
             callbacks=[checkpoint_callback, early_stop_callback, lr_monitor_callback],
-            limit_train_batches=2,
-            limit_val_batches=2,
+            fast_dev_run=cfg.fast_dev_run,
         )
 
     log.info("Start training")

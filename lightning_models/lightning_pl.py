@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import platform
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import time
 
@@ -7,6 +8,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
+
+import copy
 
 
 class LitModel(pl.LightningModule):
@@ -18,9 +21,12 @@ class LitModel(pl.LightningModule):
             torch.set_num_threads(cfg.cpu_thread.num_cpu)
         self.loss = nn.MSELoss()
         self.output_dict = {}
-        self.output_dict["prior_to_model_building"] = torch.cuda.memory_allocated()
+
         self.model = self.build_model(cfg)
+        self.output_dict["prior_to_model_building"] = torch.cuda.memory_allocated()
+        copied_model = copy.deepcopy(self.model).cuda()
         self.output_dict["after_model_building"] = torch.cuda.memory_allocated()
+        del copied_model
         self.output_dict["pytorch_total_params"] = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         self.last_training_epoch = -1
         self.train_batch_time = []
@@ -175,6 +181,11 @@ class LitModel(pl.LightningModule):
         device_total_memory = device_properties.total_memory / 1e9
         num_threads = torch.get_num_threads()
 
+        # get system info
+        python_ver = platform.python_version()
+        pytorch_ver = torch.__version__
+        pytorch_lightning_ver = pl.__version__
+
         # get model info
         model_size_mb = pl.utilities.memory.get_model_size_mb(self.model)
 
@@ -189,6 +200,9 @@ class LitModel(pl.LightningModule):
                 "num_threads": num_threads,
                 "model_size_mb": model_size_mb,
                 "max_memory_mb": max_memory_mb,
+                "python_ver": python_ver,
+                "pytorch_ver": pytorch_ver,
+                "pytorch_lightning_ver": pytorch_lightning_ver,
             }
         )
 

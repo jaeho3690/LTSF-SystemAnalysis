@@ -1,7 +1,9 @@
+#!/bin/bash
+echo 'this is etth1 base trials'
 
 #!/bin/bash
 
-START_EXP_NUM=999
+START_EXP_NUM=1999
 
 for model in Dlinear Informer Transformer; do
     for seq_len in 96 336; do 
@@ -15,7 +17,7 @@ for model in Dlinear Informer Transformer; do
                                 optimization.batch_size=$batch_size \
                                 seed=$seed \
                                 exp_num=$START_EXP_NUM \
-                                use_amp=true &
+                                use_amp=false &
                 wait 
                 echo "Experiment $START_EXP_NUM done"
             done 

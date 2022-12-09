@@ -15,6 +15,7 @@ target: OT
 
 
 # training related
+fast_dev_run: false
 exp_num: 9999
 seed: 41
 gpu_id: 1
