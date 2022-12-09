@@ -22,15 +22,16 @@ pip install setuptools==59.5.0
 
 # RUN EXPERIMENTS
 PLEASE RUN THEM one by one!! \\
-**see if this dev file first works. You should see the `Fast dev run works`**
+**see if this dev file first works. You should see the `Fast dev run works` printed out, this may take a few minutes**
 ```
 sh scripts/fast_dev_run.sh 
 ```
 **run experiments**
+The outputs are stored in the `outputs` directory
 ```
 sh run_all_exp.sh
 ```
 
 # After EXPERIMENTS
-run the jupyter file `notebook/combine_all_files.ipynb`, send me the `all_df`. \\
+run the jupyter file `notebook/combine_all_files.ipynb`, send me the `all_df`.
 
