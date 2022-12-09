@@ -30,3 +30,7 @@ sh scripts/fast_dev_run.sh
 ```
 sh run_all_exp.sh
 ```
+
+# After EXPERIMENTS
+run the jupyter file `notebook/combine_all_files.ipynb`, send me the `all_df`. \\
+
