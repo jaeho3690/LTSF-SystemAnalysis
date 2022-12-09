@@ -1,5 +1,5 @@
 defaults:
-  - data: ETTh1
+  - data: ETTm1
   - model: Transformer
   - optimization: default
   - override hydra/job_logging: colorlog
