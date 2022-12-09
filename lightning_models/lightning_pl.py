@@ -11,6 +11,8 @@ import pytorch_lightning as pl
 
 import copy
 
+MB = 1024 * 1024
+
 
 class LitModel(pl.LightningModule):
     def __init__(self, cfg):
@@ -22,9 +24,9 @@ class LitModel(pl.LightningModule):
         self.loss = nn.MSELoss()
         self.output_dict = {}
 
-        self.output_dict["prior_to_model_building"] = torch.cuda.memory_allocated()
+        self.output_dict["prior_to_model_building"] = torch.cuda.memory_allocated() / MB
         self.model = self.build_model(cfg)
-        self.output_dict["after_model_building"] = torch.cuda.memory_allocated()
+        self.output_dict["after_model_building"] = torch.cuda.memory_allocated() / MB
 
         self.output_dict["pytorch_total_params"] = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         self.last_training_epoch = -1
@@ -34,12 +36,12 @@ class LitModel(pl.LightningModule):
         # collect memory allocation at the 0, 5th epoch and first batch
         tic = time.time()
         if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"before_first_batch_{self.current_epoch}"] = torch.cuda.memory_allocated()
+            self.output_dict[f"before_first_batch_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
 
         batch_x, batch_y, batch_x_mark, batch_y_mark = batch["seq_x"], batch["seq_y"], batch["seq_x_mark"], batch["seq_y_mark"]
 
         if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"after_first_batch_{self.current_epoch}"] = torch.cuda.memory_allocated()
+            self.output_dict[f"after_first_batch_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
         # decoder input
         dec_inp = torch.zeros_like(batch_y[:, -self.cfg.pred_len :, :]).float()
         dec_inp = torch.cat([batch_y[:, : self.cfg.label_len, :], dec_inp], dim=1).float().to(self.device)
@@ -49,7 +51,7 @@ class LitModel(pl.LightningModule):
         input_cat = torch.cat((enc_input, dec_input), dim=1)
 
         if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"before_model_forward_{self.current_epoch}"] = torch.cuda.memory_allocated()
+            self.output_dict[f"before_model_forward_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
         # torch.cuda.synchronize()
         if self.cfg.model.model_name in ["Dlinear"]:
             outputs = self.model(batch_x)
@@ -58,18 +60,18 @@ class LitModel(pl.LightningModule):
         # torch.cuda.synchronize()
 
         if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"after_model_forward_{self.current_epoch}"] = torch.cuda.memory_allocated()
+            self.output_dict[f"after_model_forward_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
 
         f_dim = -1 if self.cfg.features == "MS" else 0
         outputs = outputs[:, -self.cfg.pred_len :, f_dim:]
         batch_y = batch_y[:, -self.cfg.pred_len :, f_dim:]
 
         if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"before_loss_{self.current_epoch}"] = torch.cuda.memory_allocated()
+            self.output_dict[f"before_loss_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
         loss = self.loss(outputs, batch_y)
 
         if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"after_loss_{self.current_epoch}"] = torch.cuda.memory_allocated()
+            self.output_dict[f"after_loss_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
         toc = time.time()
         train_time = toc - tic
         self.train_batch_time.append(train_time)

@@ -9,6 +9,7 @@ for model in Dlinear Informer Transformer; do
                     model=$model \
                     exp_num=9999 \
                     fast_dev_run=true \
+                    pred_len=720 \
                     optimization.batch_size=128 \
                     use_amp=true &
     wait 
@@ -16,6 +17,7 @@ for model in Dlinear Informer Transformer; do
                     model=$model \
                     exp_num=9999 \
                     fast_dev_run=true \
+                    pred_len=672 \
                     optimization.batch_size=128 \
                     use_amp=true &
     wait
