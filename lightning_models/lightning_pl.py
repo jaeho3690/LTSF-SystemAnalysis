@@ -22,11 +22,10 @@ class LitModel(pl.LightningModule):
         self.loss = nn.MSELoss()
         self.output_dict = {}
 
-        self.model = self.build_model(cfg)
         self.output_dict["prior_to_model_building"] = torch.cuda.memory_allocated()
-        copied_model = copy.deepcopy(self.model).cuda()
+        self.model = self.build_model(cfg)
         self.output_dict["after_model_building"] = torch.cuda.memory_allocated()
-        del copied_model
+
         self.output_dict["pytorch_total_params"] = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         self.last_training_epoch = -1
         self.train_batch_time = []
@@ -163,6 +162,7 @@ class LitModel(pl.LightningModule):
                 "mse": mse.item(),
             }
         )
+        print(f"MAE: {mae.item():.4f}, MSE: {mse.item():.4f}")
         # save output_dict as dataframe
         df = pd.DataFrame(self.output_dict, index=[0])
         df["train_epoch"] = self.last_training_epoch

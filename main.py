@@ -24,6 +24,12 @@ log = logging.getLogger(__name__)
 def main(cfg: DictConfig) -> None:
     print_options(cfg)
     pl.seed_everything(cfg.seed)
+
+    # print(torch.cuda.memory_allocated())
+    # model = build_model(cfg)
+    # model.cuda()
+    # print(torch.cuda.memory_allocated())
+
     checkpoint_path = os.path.join("checkpoints/", str(datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")))
 
     log.info(f"Training {cfg.model.model_name} model on {cfg.data.data_name} dataset")
@@ -79,6 +85,28 @@ def main(cfg: DictConfig) -> None:
     topk_checkpoint_paths = os.listdir(checkpoint_path)
     dm.setup(stage="test")
     trainer.test(model, dm.test_dataloader(), ckpt_path=checkpoint_path + "/" + topk_checkpoint_paths[0])
+
+
+def build_model(cfg):
+    if cfg.model.model_name == "Transformer":
+        from models.Transformer import Model
+
+        model = Model(cfg)
+    elif cfg.model.model_name == "Autoformer":
+        from models.Autoformer import Model
+
+        model = Model(cfg)
+    elif cfg.model.model_name == "Informer":
+        from models.Informer import Model
+
+        model = Model(cfg)
+    elif cfg.model.model_name == "Dlinear":
+        from models.Dlinear import Model
+
+        model = Model(cfg)
+    else:
+        raise NotImplementedError
+    return model
 
 
 if __name__ == "__main__":
