@@ -1,8 +1,9 @@
 # Instruction
 1. We only need ETT-small. Place your data on `data/ETT-small`.
-2. Install `pytorch`, `pytorch-lightning==1.6.5` and `hydra`.  
-3. First Install `pytorch` and then do the next installations. 
-4. Save `ETT-small` data on `data/` directory
+2. `python=3.9` is recommended. others need to be checked.
+3. Install `pytorch`, `pytorch-lightning==1.6.5` and `hydra`.   
+4. First Install `pytorch` and then do the next installations. 
+5. Save `ETT-small` data on `data/` directory
 
 # 1 - CUDA 11.6
 ```
