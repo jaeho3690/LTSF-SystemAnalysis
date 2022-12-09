@@ -1,0 +1,29 @@
+defaults:
+  - data: ETTh1
+  - model: Dlinear
+  - optimization: default
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+
+# forecasting task
+seq_len: 96
+label_len: 48
+pred_len: 96
+features: M
+target: OT
+
+
+# training related
+exp_num: 9999
+seed: 41
+gpu_id: 1
+use_amp: true
+cpu_thread:
+  limit_cpu_thread: true
+  num_cpu: 16
+
+save_output_path: outputs/${data.data_name}/EXP${exp_num}
+hydra:
+  run:
+    dir: ${save_output_path}

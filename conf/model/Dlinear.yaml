@@ -1,0 +1,4 @@
+
+model_name: Dlinear
+individual: False
+enc_in: 8

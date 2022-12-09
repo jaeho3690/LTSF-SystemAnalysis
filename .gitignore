@@ -1,0 +1,13 @@
+*.out
+*.csv
+*.pkl
+*.png
+*.log
+*.ckpt
+*.npy
+.ipynb_checkpoints/
+checkpoints/
+__pycache__/
+lightning_logs/
+outputs/
+.neptune/
