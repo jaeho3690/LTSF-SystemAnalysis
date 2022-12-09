@@ -220,7 +220,7 @@ class LitModel(pl.LightningModule):
         exp_ess_dict["exp_num"] = self.cfg.exp_num
         exp_ess_dict["exp_seed"] = self.cfg.seed
         exp_ess_dict["use_amp"] = self.cfg.use_amp
-        exp_ess_dict["cpu_thread"] = self.cfg.cpu_thread.num_cpu
+        exp_ess_dict["cpu_thread"] = torch.get_num_threads()
         exp_ess_dict["num_workers"] = self.cfg.optimization.num_workers
 
         exp_ess_dict["batch_size"] = self.cfg.optimization.batch_size
