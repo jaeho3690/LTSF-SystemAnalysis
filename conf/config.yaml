@@ -1,6 +1,6 @@
 defaults:
   - data: ETTm1
-  - model: Transformer
+  - model: Dlinear
   - optimization: default
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
@@ -15,14 +15,14 @@ target: OT
 
 
 # training related
-fast_dev_run: false
+benchmark: False
+fast_dev_run: False 
+limit_train_batches: 1.0
+limit_val_batches: 1.0
 exp_num: 9999
 seed: 41
 gpu_id: 0
 use_amp: true
-cpu_thread:
-  limit_cpu_thread: true
-  num_cpu: 16
 
 save_output_path: outputs/${data.data_name}/EXP${exp_num}
 hydra:

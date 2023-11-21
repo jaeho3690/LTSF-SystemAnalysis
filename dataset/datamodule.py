@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 import torch
 from torch.utils.data import DataLoader, Dataset
-import pytorch_lightning as pl
+import lightning as L
 
 from utils.tools import bcolors
 from dataset.dataloader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred
@@ -22,7 +22,7 @@ data_dict = {
 }
 
 
-class LSTFDataModule(pl.LightningDataModule):
+class LTSFDataModule(L.LightningDataModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg

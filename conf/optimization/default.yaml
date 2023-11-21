@@ -7,7 +7,7 @@ optimizer:
 callbacks:
   monitor: val_loss
   mode: min
-  max_epochs: 20
+  max_epochs: 40
   patience: 3
   min_delta: 0
   check_val_every_n_epoch: 1

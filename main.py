@@ -4,16 +4,15 @@ import pickle
 import datetime
 import logging
 import matplotlib.pyplot as plt
+
 import hydra
-import pytorch_lightning as pl
+import lightning as L
 import torch
 from omegaconf import DictConfig
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
-from pytorch_lightning.profiler import PyTorchProfiler, SimpleProfiler
-from utils.tools import print_options
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, ModelSummary, LearningRateMonitor
 
-from dataset.datamodule import LSTFDataModule
+from utils.tools import print_options
+from dataset.datamodule import LTSFDataModule
 from lightning_models.lightning_pl import LitModel
 
 torch.set_printoptions(sci_mode=False)
@@ -23,13 +22,11 @@ log = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     print_options(cfg)
-    pl.seed_everything(cfg.seed)
-
     checkpoint_path = os.path.join("checkpoints/", str(datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")))
 
     log.info(f"Training {cfg.model.model_name} model on {cfg.data.data_name} dataset")
     log.info(f"Key params: seq_len {cfg.seq_len}, label_len {cfg.label_len}, pred_len {cfg.pred_len}")
-    dm = LSTFDataModule(cfg)
+    dm = LTSFDataModule(cfg)
     dm.setup(stage="fit")
     model = LitModel(cfg)
 
@@ -51,28 +48,18 @@ def main(cfg: DictConfig) -> None:
     )
 
     lr_monitor_callback = LearningRateMonitor(logging_interval="step")
-    # profiler = PyTorchProfiler(dirpath=cfg.save_output_path,
-    #                         filename=f"{cfg.model.model_name}_{cfg.data.data_name}_profile")
 
-    if cfg.use_amp:
-        trainer = pl.Trainer(
-            accelerator="gpu",
-            gpus=[cfg.gpu_id],
-            check_val_every_n_epoch=cfg.optimization.callbacks.check_val_every_n_epoch,
-            max_epochs=cfg.optimization.callbacks.max_epochs,
-            callbacks=[checkpoint_callback, early_stop_callback, lr_monitor_callback],
-            fast_dev_run=cfg.fast_dev_run,
-            precision=16,
-        )
-    else:
-        trainer = pl.Trainer(
-            accelerator="gpu",
-            gpus=[cfg.gpu_id],
-            check_val_every_n_epoch=cfg.optimization.callbacks.check_val_every_n_epoch,
-            max_epochs=cfg.optimization.callbacks.max_epochs,
-            callbacks=[checkpoint_callback, early_stop_callback, lr_monitor_callback],
-            fast_dev_run=cfg.fast_dev_run,
-        )
+    trainer = L.Trainer(
+        accelerator="gpu",
+        devices=[cfg.gpu_id],
+        benchmark=cfg.benchmark,
+        check_val_every_n_epoch=cfg.optimization.callbacks.check_val_every_n_epoch,
+        max_epochs=cfg.optimization.callbacks.max_epochs,
+        callbacks=[checkpoint_callback, early_stop_callback, lr_monitor_callback],
+        fast_dev_run=cfg.fast_dev_run,
+        limit_train_batches=cfg.limit_train_batches,
+        limit_val_batches=cfg.limit_val_batches,
+    )
 
     log.info("Start training")
     trainer.fit(model, dm)

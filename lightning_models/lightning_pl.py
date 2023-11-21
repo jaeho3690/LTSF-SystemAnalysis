@@ -3,45 +3,37 @@ import numpy as np
 import platform
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import time
+from collections import defaultdict
 
 import torch
+import torchmetrics
 from torch import nn
 import torch.nn.functional as F
-import pytorch_lightning as pl
-
-import copy
-
-MB = 1024 * 1024
+import lightning as L
 
 
-class LitModel(pl.LightningModule):
+class LitModel(L.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
         self.lr = cfg.optimization.optimizer.learning_rate
-        if cfg.cpu_thread.limit_cpu_thread:
-            torch.set_num_threads(cfg.cpu_thread.num_cpu)
         self.loss = nn.MSELoss()
         self.output_dict = {}
+        self.set_monitoring_metrics()
 
-        self.output_dict["prior_to_model_building"] = torch.cuda.memory_allocated() / MB
         self.model = self.build_model(cfg)
-        self.output_dict["after_model_building"] = torch.cuda.memory_allocated() / MB
-
         self.output_dict["pytorch_total_params"] = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        self.last_training_epoch = -1
-        self.train_batch_time = []
 
     def training_step(self, batch, batch_idx):
         # collect memory allocation at the 0, 5th epoch and first batch
         tic = time.time()
-        if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"before_first_batch_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
+        batch_x, batch_y, batch_x_mark, batch_y_mark = (
+            batch["seq_x"],
+            batch["seq_y"],
+            batch["seq_x_mark"],
+            batch["seq_y_mark"],
+        )
 
-        batch_x, batch_y, batch_x_mark, batch_y_mark = batch["seq_x"], batch["seq_y"], batch["seq_x_mark"], batch["seq_y_mark"]
-
-        if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"after_first_batch_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
         # decoder input
         dec_inp = torch.zeros_like(batch_y[:, -self.cfg.pred_len :, :]).float()
         dec_inp = torch.cat([batch_y[:, : self.cfg.label_len, :], dec_inp], dim=1).float().to(self.device)
@@ -50,35 +42,27 @@ class LitModel(pl.LightningModule):
         dec_input = torch.cat((dec_inp, batch_y_mark), dim=2)
         input_cat = torch.cat((enc_input, dec_input), dim=1)
 
-        if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"before_model_forward_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
-        # torch.cuda.synchronize()
         if self.cfg.model.model_name in ["Dlinear"]:
             outputs = self.model(batch_x)
         else:
             outputs = self.model(input_cat)
-        # torch.cuda.synchronize()
-
-        if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"after_model_forward_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
 
         f_dim = -1 if self.cfg.features == "MS" else 0
         outputs = outputs[:, -self.cfg.pred_len :, f_dim:]
         batch_y = batch_y[:, -self.cfg.pred_len :, f_dim:]
 
-        if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"before_loss_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
         loss = self.loss(outputs, batch_y)
-
-        if self.current_epoch in [0, 3] and batch_idx == 0:
-            self.output_dict[f"after_loss_{self.current_epoch}"] = torch.cuda.memory_allocated() / MB
-        toc = time.time()
-        train_time = toc - tic
-        self.train_batch_time.append(train_time)
-        return {"loss": loss}
+        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_mae", self.train_mae(outputs, batch_y), on_epoch=True, prog_bar=True, logger=True)
+        return loss
 
     def validation_step(self, batch, batch_idx):
-        batch_x, batch_y, batch_x_mark, batch_y_mark = batch["seq_x"], batch["seq_y"], batch["seq_x_mark"], batch["seq_y_mark"]
+        batch_x, batch_y, batch_x_mark, batch_y_mark = (
+            batch["seq_x"],
+            batch["seq_y"],
+            batch["seq_x_mark"],
+            batch["seq_y_mark"],
+        )
 
         # decoder input
         dec_inp = torch.zeros_like(batch_y[:, -self.cfg.pred_len :, :]).float()
@@ -96,32 +80,23 @@ class LitModel(pl.LightningModule):
         outputs = outputs[:, -self.cfg.pred_len :, f_dim:]
         batch_y = batch_y[:, -self.cfg.pred_len :, f_dim:]
 
-        loss = self.loss(outputs, batch_y)
-        return {"val_loss": loss, "y_pred": outputs, "label": batch_y}
+        val_loss = self.loss(outputs, batch_y)
+        self.log("val_loss", val_loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val_mae", self.val_mae(outputs, batch_y), on_epoch=True, prog_bar=True, logger=True)
+        return val_loss
 
-    def validation_epoch_end(self, outputs):
-        y_pred = torch.cat([x["y_pred"] for x in outputs]).cpu()
-        y_true = torch.cat([x["label"] for x in outputs]).cpu()
-        val_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-
-        # reshape to 2D
-        y_pred = y_pred.reshape(-1, y_pred.shape[-1])
-        y_true = y_true.reshape(-1, y_true.shape[-1])
-
-        mae = mean_absolute_error(y_true, y_pred)
-        mse = mean_squared_error(y_true, y_pred)
-
-        self.log_dict(
-            {
-                "val_loss": val_loss,
-                "mae": mae,
-                "mse": mse,
-            }
-        )
-        self.last_training_epoch = self.current_epoch
+    def on_test_epoch_start(self) -> None:
+        super().on_test_epoch_start()
+        self.test_output_list = defaultdict(list)
+        return
 
     def test_step(self, batch, batch_idx):
-        batch_x, batch_y, batch_x_mark, batch_y_mark = batch["seq_x"], batch["seq_y"], batch["seq_x_mark"], batch["seq_y_mark"]
+        batch_x, batch_y, batch_x_mark, batch_y_mark = (
+            batch["seq_x"],
+            batch["seq_y"],
+            batch["seq_x_mark"],
+            batch["seq_y_mark"],
+        )
 
         # decoder input
         dec_inp = torch.zeros_like(batch_y[:, -self.cfg.pred_len :, :]).float()
@@ -140,12 +115,15 @@ class LitModel(pl.LightningModule):
         batch_y = batch_y[:, -self.cfg.pred_len :, f_dim:]
 
         loss = self.loss(outputs, batch_y)
-        return {"test_loss": loss, "y_pred": outputs, "label": batch_y}
+        self.test_output_list["test_loss"].append(loss)
+        self.test_output_list["y_pred"].append(outputs)
+        self.test_output_list["y_true"].append(batch_y)
 
-    def test_epoch_end(self, outputs):
-        y_pred = torch.cat([x["y_pred"] for x in outputs]).cpu()
-        y_true = torch.cat([x["label"] for x in outputs]).cpu()
-        test_loss = torch.stack([x["test_loss"] for x in outputs]).mean()
+    def on_test_epoch_end(self):
+        outputs = self.test_output_list
+        y_pred = torch.cat(outputs["y_pred"]).cpu()
+        y_true = torch.cat(outputs["y_true"]).cpu()
+        test_loss = torch.stack(outputs["test_loss"]).mean().cpu()
 
         # reshape to 2D
         y_pred = y_pred.reshape(-1, y_pred.shape[-1])
@@ -153,8 +131,6 @@ class LitModel(pl.LightningModule):
 
         mae = mean_absolute_error(y_true, y_pred)
         mse = mean_squared_error(y_true, y_pred)
-
-        self.update_system_related_info()
         self.update_experiment_related_info()
 
         self.output_dict.update(
@@ -167,45 +143,13 @@ class LitModel(pl.LightningModule):
         print(f"MAE: {mae.item():.4f}, MSE: {mse.item():.4f}")
         # save output_dict as dataframe
         df = pd.DataFrame(self.output_dict, index=[0])
-        df["train_epoch"] = self.last_training_epoch
-        df["train_batch"] = self.trainer.num_training_batches
-        df["secs/batch"] = np.mean(self.train_batch_time).item()
-        df["secs/epoch"] = np.mean(self.train_batch_time).item() * self.trainer.num_training_batches
         df["model_hpams"] = str(self.cfg.model)
-        df.to_csv(f"{self.cfg.save_output_path}/run_exp{self.cfg.exp_num}_seed{self.cfg.seed}_{self.cfg.model.model_name}.csv", index=False)
-        print(f"Saved output_dict as dataframe to {self.cfg.save_output_path}/run_{self.cfg.exp_num}_{self.cfg.seed}_{self.cfg.model.model_name}.csv")
-
-    def update_system_related_info(self):
-        """Update system related info to self.output_dict"""
-        # get device info
-        device_properties = torch.cuda.get_device_properties(0)
-        device_name = device_properties.name
-        device_total_memory = device_properties.total_memory / 1e9
-        num_threads = torch.get_num_threads()
-
-        # get system info
-        python_ver = platform.python_version()
-        pytorch_ver = torch.__version__
-        pytorch_lightning_ver = pl.__version__
-
-        # get model info
-        model_size_mb = pl.utilities.memory.get_model_size_mb(self.model)
-
-        # get system info
-        max_memory_mb = torch.cuda.max_memory_allocated() / 1e6
-        print(f"device_name: {device_name}, device_total_memory: {device_total_memory}, num_threads: {num_threads}, max_memory_mb: {max_memory_mb}")
-        # update as key to self.output_dict
-        self.output_dict.update(
-            {
-                "device_name": device_name,
-                "device_total_memory": device_total_memory,
-                "num_threads": num_threads,
-                "model_size_mb": model_size_mb,
-                "max_memory_mb": max_memory_mb,
-                "python_ver": python_ver,
-                "pytorch_ver": pytorch_ver,
-                "pytorch_lightning_ver": pytorch_lightning_ver,
-            }
+        df.to_csv(
+            f"{self.cfg.save_output_path}/run_exp{self.cfg.exp_num}_seed{self.cfg.seed}_{self.cfg.model.model_name}.csv",
+            index=False,
+        )
+        print(
+            f"Saved output_dict as dataframe to {self.cfg.save_output_path}/run_{self.cfg.exp_num}_{self.cfg.seed}_{self.cfg.model.model_name}.csv"
         )
 
     def update_experiment_related_info(self):
@@ -220,7 +164,6 @@ class LitModel(pl.LightningModule):
         exp_ess_dict["exp_num"] = self.cfg.exp_num
         exp_ess_dict["exp_seed"] = self.cfg.seed
         exp_ess_dict["use_amp"] = self.cfg.use_amp
-        exp_ess_dict["cpu_thread"] = torch.get_num_threads()
         exp_ess_dict["num_workers"] = self.cfg.optimization.num_workers
 
         exp_ess_dict["batch_size"] = self.cfg.optimization.batch_size
@@ -279,3 +222,14 @@ class LitModel(pl.LightningModule):
             lambda6 = lambda epoch: self.lr if epoch < 5 else self.lr * 0.1
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda6)
         return scheduler
+
+    def set_monitoring_metrics(self):
+        # train
+        self.train_mae = torchmetrics.MeanAbsoluteError()
+
+        # val
+        self.val_mae = torchmetrics.MeanAbsoluteError()
+
+        # test
+        self.test_mse = torchmetrics.MeanSquaredError()
+        self.test_mae = torchmetrics.MeanAbsoluteError()
